@@ -131,6 +131,8 @@ struct query {
   bool require_bike_transport_{false};
   bool require_car_transport_{false};
   bool no_compulsory_reservation_{false};
+  bool no_supplement_required_{false};
+  bool only_included_in_pass_{false};
   transfer_time_settings transfer_time_settings_{};
   std::vector<via_stop> via_stops_{};
   std::optional<duration_t> fastest_direct_{};
@@ -138,6 +140,14 @@ struct query {
   bool slow_direct_{false};
   double fastest_slow_direct_factor_{2.0};
 };
+
+// Route flags required by the query that are filtered at runtime
+// (see raptor::set_extra_required_flags).
+inline route_flags_mask_t extra_required_route_flags(query const& q) {
+  return static_cast<route_flags_mask_t>(
+      (q.no_supplement_required_ ? 1U << kSupplementNotRequired : 0U) |
+      (q.only_included_in_pass_ ? 1U << kIncludedInPass : 0U));
+}
 
 }  // namespace nigiri::routing
 

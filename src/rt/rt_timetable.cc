@@ -88,13 +88,8 @@ rt_transport_idx_t rt_timetable::add_rt_transport(
       rt_transport_stop_times_[rt_t].size());
   rt_transport_track_sequence_.add_back_sized(0U);
 
-  auto const flags_defaults = std::array{
-      // TODO
-      false,  // kBikesAllowed
-      false,  // kCarsAllowed
-      false,  // kWheelchairAccessible
-      true,  // kReservationNotRequired
-  };
+  // TODO
+  auto const flags_defaults = kDefaultRouteFlags;
 
   rt_transport_line_.add_back_sized(0U);
   rt_transport_is_cancelled_.resize(rt_transport_is_cancelled_.size() + 1U);

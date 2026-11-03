@@ -421,7 +421,23 @@ enum route_flag : std::uint8_t {
   kCarsAllowed = 1,
   kWheelchairAccessible = 2,
   kReservationNotRequired = 3,
+  kSupplementNotRequired = 4,
+  kIncludedInPass = 5,
   kNumRouteFlags
+};
+
+// Bit i set <=> route_flag i is required / has to be checked.
+using route_flags_mask_t = std::uint8_t;
+static_assert(kNumRouteFlags <= sizeof(route_flags_mask_t) * 8U);
+
+// Default value of each route flag if not specified by the data source.
+constexpr std::array<bool, kNumRouteFlags> kDefaultRouteFlags = {
+    false,  // kBikesAllowed
+    false,  // kCarsAllowed
+    false,  // kWheelchairAccessible
+    true,  // kReservationNotRequired
+    true,  // kSupplementNotRequired
+    true  // kIncludedInPass
 };
 
 constexpr std::string_view to_str(clasz const c) {

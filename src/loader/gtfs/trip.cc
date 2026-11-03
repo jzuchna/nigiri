@@ -309,7 +309,7 @@ trip_data read_trips(
           reservation_not_required = false;
         }
 
-        auto flags = std::array<bool, kNumRouteFlags>{};
+        auto flags = kDefaultRouteFlags;
         flags[kBikesAllowed] = bikes_allowed;
         flags[kCarsAllowed] = cars_allowed;
         flags[kWheelchairAccessible] = wheelchair_accessible;

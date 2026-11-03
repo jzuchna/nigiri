@@ -86,6 +86,7 @@ raptor_state one_to_all(timetable const& tt,
       q.no_compulsory_reservation_,
       q.transfer_time_settings_,
       q.prf_idx_};
+  r.set_extra_required_flags(extra_required_route_flags(q));
 
   run_raptor(std::move(r), tt, start_time, q);
 

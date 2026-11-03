@@ -21,6 +21,9 @@
 namespace nigiri::routing::gpu {
 
 inline bool gpu_supported(query const& q, rt_timetable const* = nullptr) {
+  if (extra_required_route_flags(q) != 0U) {
+    return false;  // extra route flag filters are not implemented on the GPU
+  }
   return q.via_stops_.empty();
 }
 

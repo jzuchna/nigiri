@@ -476,7 +476,9 @@ utl::generator<std::vector<journey::leg>> get_direct_journeys(
   constexpr auto kFwd = Dir == direction::kForward;
   bool const is_wheelchair = q.prf_idx_ == kWheelchairProfile;
   auto flags = std::array{q.require_bike_transport_, q.require_car_transport_,
-                          is_wheelchair, q.no_compulsory_reservation_};
+                          is_wheelchair, q.no_compulsory_reservation_,
+                          q.no_supplement_required_, q.only_included_in_pass_};
+  static_assert(flags.size() == kNumRouteFlags);
 
   auto const merge_sorted = [](auto& dst, auto const& src) {
     auto const original_size = static_cast<int>(dst.size());
@@ -526,6 +528,12 @@ utl::generator<std::vector<journey::leg>> get_direct_journeys(
                  !tt.is_flag_set(kReservationNotRequired, r))) {
               return;
             }
+            if ((q.no_supplement_required_ &&
+                 !tt.is_flag_set(kSupplementNotRequired, r)) ||
+                (q.only_included_in_pass_ &&
+                 !tt.is_flag_set(kIncludedInPass, r))) {
+              return;
+            }
 
             auto const fr = rt::frun{
                 tt, rtt,
@@ -572,6 +580,12 @@ utl::generator<std::vector<journey::leg>> get_direct_journeys(
                    !rtt->is_flag_set(kWheelchairAccessible, x)) ||
                   (q.no_compulsory_reservation_ &&
                    !rtt->is_flag_set(kReservationNotRequired, x))) {
+                return;
+              }
+              if ((q.no_supplement_required_ &&
+                   !rtt->is_flag_set(kSupplementNotRequired, x)) ||
+                  (q.only_included_in_pass_ &&
+                   !rtt->is_flag_set(kIncludedInPass, x))) {
                 return;
               }
 

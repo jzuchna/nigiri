@@ -121,7 +121,7 @@ struct trip {
   std::optional<std::vector<frequency>> frequency_;
   bool requires_interpolation_{false};
   bool requires_sorting_{false};
-  std::array<bool, kNumRouteFlags> flags_{false, false, false, true};
+  std::array<bool, kNumRouteFlags> flags_{kDefaultRouteFlags};
   std::uint32_t from_line_{0U}, to_line_{0U};
 
   // GTFS extension (MBTA): trips.txt `trip_route_type` overrides the

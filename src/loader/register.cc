@@ -410,6 +410,22 @@ bool trip::get_compulsory_reservation() const {
 void trip::set_compulsory_reservation(bool const compulsory) const {
   flags_[kReservationNotRequired] = !compulsory;
 }
+void trip::set_supplement_required(bool const required) const {
+  flags_[kSupplementNotRequired] = !required;
+}
+void trip::set_included_in_pass(bool const included) const {
+  flags_[kIncludedInPass] = included;
+}
+
+std::vector<attribute> trip::get_attributes() const {
+  auto ret = std::vector<attribute>{};
+  ret.reserve(attributes_.size());
+  for (auto const a : attributes_) {
+    ret.emplace_back(tt_, tt_->attributes_[a].code_.view(),
+                     tt_->attributes_[a].text_);
+  }
+  return ret;
+}
 
 // ===========
 // User Script
@@ -641,7 +657,11 @@ script_runner::script_runner(std::string const& user_script)
       "get_wheelchair_accessible", &trip::get_wheelchair_accessible,  //
       "set_wheelchair_accessible", &trip::set_wheelchair_accessible,  //
       "get_compulsory_reservation", &trip::get_compulsory_reservation,  //
-      "set_compulsory_reservation", &trip::set_compulsory_reservation  //
+      "set_compulsory_reservation", &trip::set_compulsory_reservation,  //
+      "set_supplement_required", &trip::set_supplement_required,  //
+      "set_included_in_pass", &trip::set_included_in_pass,  //
+      "get_attributes",
+      [](trip const& t) { return sol::as_table(t.get_attributes()); }  //
   );
 
   impl_->process_attribute_ = impl_->lua_["process_attribute"];
