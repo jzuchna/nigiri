@@ -492,6 +492,18 @@ void reconstruct_journey_with_vias(timetable const& tt,
           }
         }
 
+        if (q.no_supplement_required_) {
+          if (!apply_filter(kSupplementNotRequired)) {
+            continue;
+          }
+        }
+
+        if (q.only_included_in_pass_) {
+          if (!apply_filter(kIncludedInPass)) {
+            continue;
+          }
+        }
+
         auto const location_seq = rtt->rt_transport_location_seq_[rt_t];
         for (auto const [i, s] : utl::enumerate(location_seq)) {
           auto const stp = stop{s};
@@ -560,6 +572,18 @@ void reconstruct_journey_with_vias(timetable const& tt,
 
       if (q.no_compulsory_reservation_) {
         if (!apply_filter(kReservationNotRequired)) {
+          continue;
+        }
+      }
+
+      if (q.no_supplement_required_) {
+        if (!apply_filter(kSupplementNotRequired)) {
+          continue;
+        }
+      }
+
+      if (q.only_included_in_pass_) {
+        if (!apply_filter(kIncludedInPass)) {
           continue;
         }
       }

@@ -123,7 +123,7 @@ L001I01S1FES,08:31:00,,23,19,,0,0,7.473
       .emplace_back(route_id_idx_t::invalid(), nullptr, nullptr, "L001I01S1FES",
                     kEmptyTranslation, kEmptyTranslation,
                     direction_id_t::invalid(), shape_idx_t::invalid(),
-                    std::array{false, false, false, true}, "", false)
+                    kDefaultRouteFlags, "", false)
       .trip_idx_ = {};
   auto tt = timetable{};
   auto i18n = translator{.tt_ = tt};
@@ -160,7 +160,7 @@ L001I01S1FES,,08:31:00,23,19,,0,0,7.473
       .emplace_back(route_id_idx_t::invalid(), nullptr, nullptr, "L001I01S1FES",
                     kEmptyTranslation, kEmptyTranslation,
                     direction_id_t::invalid(), shape_idx_t::invalid(),
-                    std::array{false, false, false, true}, "", false)
+                    kDefaultRouteFlags, "", false)
       .trip_idx_ = {};
   auto tt = timetable{};
   auto i18n = translator{.tt_ = tt};
@@ -188,7 +188,7 @@ L001I01S1FES,,,23,19,,0,0,7.473
       .emplace_back(route_id_idx_t::invalid(), nullptr, nullptr, "L001I01S1FES",
                     kEmptyTranslation, kEmptyTranslation,
                     direction_id_t::invalid(), shape_idx_t::invalid(),
-                    std::array{false, false, false, true}, "", false)
+                    kDefaultRouteFlags, "", false)
       .trip_idx_ = {};
   auto tt = timetable{};
   auto i18n = translator{.tt_ = tt};

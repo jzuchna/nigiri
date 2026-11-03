@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cassert>
 #include <span>
 
@@ -174,6 +175,47 @@ struct raptor {
   }
 
   void set_bounds(unsigned const last_round) { bounds_last_k_ = last_round; }
+
+  // Route flags filtered at runtime in addition to the flags that are
+  // handled by the compile-time filter switch (bikes, cars, wheelchair,
+  // reservation). Bit i set <=> route_flag i is required.
+  void set_extra_required_flags(route_flags_mask_t const flags) {
+    extra_required_flags_ = flags;
+    extra_section_flags_ = 0U;
+  }
+
+  // Returns false if a required extra flag is not set on any section.
+  // Otherwise, extra_section_flags_ := extra flags only set on some sections
+  // (to be checked section by section in update_route/update_rt_transport).
+  bool check_extra_flags(std::array<bitvec, kNumRouteFlags> const& flags,
+                         auto const idx) {
+    extra_section_flags_ = 0U;
+    for (auto m = extra_required_flags_; m != 0U;
+         m = static_cast<route_flags_mask_t>(m & (m - 1U))) {
+      auto const f = static_cast<unsigned>(std::countr_zero(m));
+      if (!flags[f].test(idx * 2U)) {
+        if (!flags[f].test(idx * 2U + 1U)) {
+          return false;
+        }
+        extra_section_flags_ |= static_cast<route_flags_mask_t>(1U << f);
+      }
+    }
+    return true;
+  }
+
+  template <typename PerSection, typename Idx>
+  static bool extra_section_flags_set(route_flags_mask_t m,
+                                      PerSection const& per_section,
+                                      Idx const idx,
+                                      auto const section) {
+    for (; m != 0U; m = static_cast<route_flags_mask_t>(m & (m - 1U))) {
+      if (!per_section[static_cast<unsigned>(std::countr_zero(m))][idx]
+                      [static_cast<std::size_t>(section)]) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
@@ -520,8 +562,8 @@ private:
           if (!flag_set_on_some_sections) {
             return false;
           }
-          filters |=
-              static_cast<uint8_t>(1 << (route_flag::kNumRouteFlags - f - 1));
+          filters |= static_cast<uint8_t>(
+              1 << (route_flag::kReservationNotRequired - f));
           return true;
         }
         return true;
@@ -549,6 +591,11 @@ private:
         if (!apply_filter(route_flag::kReservationNotRequired)) {
           return;
         }
+      }
+
+      if (extra_required_flags_ != 0U &&
+          !check_extra_flags(tt_.route_flags_, r_idx)) {
+        return;
       }
 
       ++stats_.n_routes_visited_;
@@ -607,8 +654,8 @@ private:
           if (!flag_set_on_some_sections) {
             return false;
           }
-          filters |=
-              static_cast<uint8_t>(1 << (route_flag::kNumRouteFlags - f - 1));
+          filters |= static_cast<uint8_t>(
+              1 << (route_flag::kReservationNotRequired - f));
           return true;
         }
         return true;
@@ -636,6 +683,11 @@ private:
         if (!apply_filter(route_flag::kReservationNotRequired)) {
           return;
         }
+      }
+
+      if (extra_required_flags_ != 0U &&
+          !check_extra_flags(rtt_->rt_transport_flags_, rt_t_idx)) {
+        return;
       }
 
       ++stats_.n_routes_visited_;
@@ -1105,6 +1157,7 @@ private:
             bool WithSectionWheelchairFilter,
             bool WithSectionReservationNotRequiredFilter>
   bool update_rt_transport(unsigned const k, rt_transport_idx_t const rt_t) {
+    auto const extra_section_flags = extra_section_flags_;
     auto const stop_seq = rtt_->rt_transport_location_seq_[rt_t];
     // et[v] = there is an entry point on this transport such that the
     // journey has visited v via stops when the transport passes this stop
@@ -1142,6 +1195,13 @@ private:
 
       if constexpr (WithSectionReservationNotRequiredFilter) {
         apply_filter(route_flag::kReservationNotRequired);
+      }
+
+      if (extra_section_flags != 0U && !is_first &&
+          !extra_section_flags_set(extra_section_flags,
+                                   rtt_->rt_flags_per_section_, rt_t,
+                                   kFwd ? stop_idx - 1 : stop_idx)) {
+        et.fill(false);
       }
 
       if ((kFwd && stop_idx != 0U) || (kBwd && stop_idx != n_stops - 1U)) {
@@ -1218,6 +1278,7 @@ private:
             bool WithSectionWheelchairFilter,
             bool WithSectionReservationNotRequiredFilter>
   bool update_route(unsigned const k, route_idx_t const r) {
+    auto const extra_section_flags = extra_section_flags_;
     auto const stop_seq = tt_.route_location_seq_[r];
     bool any_marked = false;
 
@@ -1275,6 +1336,13 @@ private:
 
       if constexpr (WithSectionReservationNotRequiredFilter) {
         apply_filter(route_flag::kReservationNotRequired);
+      }
+
+      if (extra_section_flags != 0U && !is_first &&
+          !extra_section_flags_set(extra_section_flags,
+                                   tt_.route_flags_per_section_, r,
+                                   kFwd ? stop_idx - 1 : stop_idx)) {
+        et = {};
       }
 
       if constexpr (Vias != 0U) {
@@ -1580,6 +1648,8 @@ private:
   bool no_compulsory_reservation_;
   bool is_wheelchair_;
   transfer_time_settings transfer_time_settings_;
+  route_flags_mask_t extra_required_flags_{0U};
+  route_flags_mask_t extra_section_flags_{0U};
 };
 
 }  // namespace nigiri::routing

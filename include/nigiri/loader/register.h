@@ -229,6 +229,8 @@ struct trip {
   void set_wheelchair_accessible(bool) const;
   bool get_compulsory_reservation() const;
   void set_compulsory_reservation(bool) const;
+  void set_supplement_required(bool) const;
+  void set_included_in_pass(bool) const;
 
   source_idx_t src_;
   std::string_view id_;
@@ -241,6 +243,7 @@ struct trip {
   route_id_idx_t route_;
   std::array<bool, kNumRouteFlags>& flags_;
   trip_debug dbg_;
+  std::vector<attribute_idx_t> attributes_{};
 
   timetable* tt_{nullptr};
 };

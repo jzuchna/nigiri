@@ -1609,10 +1609,11 @@ void load_timetable(loader_config const& config,
 
       auto const clasz = static_cast<std::size_t>(
           gtfs::to_clasz(to_idx(tt.route_ids_[src].route_id_type_[route_id])));
-      auto flags = std::array<bool, kNumRouteFlags>{
-          config.bikes_allowed_default_[clasz],
-          config.cars_allowed_default_[clasz], false,
-          config.reservation_not_required_default_[clasz]};
+      auto flags = kDefaultRouteFlags;
+      flags[kBikesAllowed] = config.bikes_allowed_default_[clasz];
+      flags[kCarsAllowed] = config.cars_allowed_default_[clasz];
+      flags[kReservationNotRequired] =
+          config.reservation_not_required_default_[clasz];
       auto t = trip{
           tt,
           src,
@@ -1631,6 +1632,14 @@ void load_timetable(loader_config const& config,
           trip_debug{source_file_idx, static_cast<unsigned>(sj.dbg_offset_),
                      static_cast<unsigned>(sj.dbg_offset_)},
       };
+      for (auto const& sp : jp.stop_points_) {
+        for (auto const* n : sp.notices_) {
+          if (n->idx_ != attribute_idx_t::invalid()) {
+            t.attributes_.push_back(n->idx_);
+          }
+        }
+      }
+      utl::erase_duplicates(t.attributes_);
       auto const trip_idx = process_trip(r, t) ? register_trip(tt, ctx, t)
                                                : trip_idx_t::invalid();
       if (trip_idx == trip_idx_t::invalid()) {

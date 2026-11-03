@@ -154,6 +154,7 @@ routing_result pong(timetable const& tt,
                           q.no_compulsory_reservation_,
                           q.transfer_time_settings_,
                           q.prf_idx_};
+  ping.set_extra_required_flags(extra_required_route_flags(q));
 
   // ====
   // PONG
@@ -208,6 +209,7 @@ routing_result pong(timetable const& tt,
                           q.no_compulsory_reservation_,
                           q.transfer_time_settings_,
                           q.prf_idx_};
+  pong.set_extra_required_flags(extra_required_route_flags(q));
 
   q.flip_dir();
 

@@ -39,6 +39,8 @@ query make_alternative_query(timetable const&,
       .require_bike_transport_ = q.require_bike_transport_,
       .require_car_transport_ = q.require_car_transport_,
       .no_compulsory_reservation_ = q.no_compulsory_reservation_,
+      .no_supplement_required_ = q.no_supplement_required_,
+      .only_included_in_pass_ = q.only_included_in_pass_,
       .transfer_time_settings_ = q.transfer_time_settings_,
   };
 }
