@@ -84,9 +84,10 @@ raptor_state one_to_all(timetable const& tt,
       q.require_car_transport_,
       is_wheelchair,
       q.no_compulsory_reservation_,
+      q.no_supplement_required_,
+      q.only_included_in_pass_,
       q.transfer_time_settings_,
       q.prf_idx_};
-  r.set_extra_required_flags(extra_required_route_flags(q));
 
   run_raptor(std::move(r), tt, start_time, q);
 

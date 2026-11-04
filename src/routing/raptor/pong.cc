@@ -152,9 +152,10 @@ routing_result pong(timetable const& tt,
                           q.require_car_transport_,
                           q.prf_idx_ == 2U,
                           q.no_compulsory_reservation_,
+                          q.no_supplement_required_,
+                          q.only_included_in_pass_,
                           q.transfer_time_settings_,
                           q.prf_idx_};
-  ping.set_extra_required_flags(extra_required_route_flags(q));
 
   // ====
   // PONG
@@ -207,9 +208,10 @@ routing_result pong(timetable const& tt,
                           q.require_car_transport_,
                           q.prf_idx_ == 2U,
                           q.no_compulsory_reservation_,
+                          q.no_supplement_required_,
+                          q.only_included_in_pass_,
                           q.transfer_time_settings_,
                           q.prf_idx_};
-  pong.set_extra_required_flags(extra_required_route_flags(q));
 
   q.flip_dir();
 

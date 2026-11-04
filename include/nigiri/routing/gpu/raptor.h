@@ -21,9 +21,6 @@
 namespace nigiri::routing::gpu {
 
 inline bool gpu_supported(query const& q, rt_timetable const* = nullptr) {
-  if (extra_required_route_flags(q) != 0U) {
-    return false;  // extra route flag filters are not implemented on the GPU
-  }
   return q.via_stops_.empty();
 }
 
@@ -79,7 +76,9 @@ struct gpu_raptor {
       bool const require_bike_transport,
       bool const require_car_transport,
       bool const is_wheelchair,
-      bool const no_compulsory_reservation_,
+      bool const no_compulsory_reservation,
+      bool const no_supplement_required,
+      bool const only_included_in_pass,
       transfer_time_settings const& tts,
       profile_idx_t const prf_idx);
 
@@ -122,6 +121,8 @@ private:
   bool require_car_transport_;
   bool is_wheelchair_;
   bool no_compulsory_reservation_;
+  bool no_supplement_required_;
+  bool only_included_in_pass_;
   transfer_time_settings transfer_time_settings_;
 
   profile_idx_t prf_idx_;

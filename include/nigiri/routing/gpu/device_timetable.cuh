@@ -38,6 +38,8 @@ inline constexpr auto kBikeSections = 1U;
 inline constexpr auto kCarSections = 2U;
 inline constexpr auto kWheelchairSections = 4U;
 inline constexpr auto kNoCompulsoryReservationSections = 8U;
+inline constexpr auto kNoSupplementRequiredSections = 16U;
+inline constexpr auto kIncludedInPassSections = 32U;
 
 template <typename Key>
 struct device_transport_filters {
@@ -58,6 +60,14 @@ struct device_transport_filters {
         !reservation_not_required_.sections_[el][sec]) {
       return true;
     }
+    if ((section_mask & kNoSupplementRequiredSections) != 0U &&
+        !supplement_not_required_.sections_[el][sec]) {
+      return true;
+    }
+    if ((section_mask & kIncludedInPassSections) != 0U &&
+        !included_in_pass_.sections_[el][sec]) {
+      return true;
+    }
     return false;
   }
 
@@ -65,6 +75,8 @@ struct device_transport_filters {
   device_transport_filter<Key> car_;
   device_transport_filter<Key> wheelchair_;
   device_transport_filter<Key> reservation_not_required_;
+  device_transport_filter<Key> supplement_not_required_;
+  device_transport_filter<Key> included_in_pass_;
 };
 
 struct device_rt_timetable {

@@ -95,6 +95,8 @@ struct query_engine {
                bool,
                bool,
                bool,
+               bool,
+               bool,
                transfer_time_settings,
                profile_idx_t);
 

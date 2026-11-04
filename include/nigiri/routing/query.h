@@ -141,14 +141,6 @@ struct query {
   double fastest_slow_direct_factor_{2.0};
 };
 
-// Route flags required by the query that are filtered at runtime
-// (see raptor::set_extra_required_flags).
-inline route_flags_mask_t extra_required_route_flags(query const& q) {
-  return static_cast<route_flags_mask_t>(
-      (q.no_supplement_required_ ? 1U << kSupplementNotRequired : 0U) |
-      (q.only_included_in_pass_ ? 1U << kIncludedInPass : 0U));
-}
-
 }  // namespace nigiri::routing
 
 template <>

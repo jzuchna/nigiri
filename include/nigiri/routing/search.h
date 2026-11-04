@@ -85,6 +85,8 @@ struct search {
             bool const require_bikes_allowed,
             bool const require_cars_allowed,
             bool const no_compulsory_reservation,
+            bool const no_supplement_required,
+            bool const only_included_in_pass,
             transfer_time_settings& tts,
             algo_state_t& algo_state) {
     auto span = get_otel_tracer()->StartSpan("search::init");
@@ -167,6 +169,8 @@ struct search {
         require_cars_allowed,
         q_.prf_idx_ == 2U,
         no_compulsory_reservation,
+        no_supplement_required,
+        only_included_in_pass,
         tts,
         q_.prf_idx_};
   }
@@ -195,13 +199,12 @@ struct search {
                    q_.require_bike_transport_,
                    q_.require_car_transport_,
                    q_.no_compulsory_reservation_,
+                   q_.no_supplement_required_,
+                   q_.only_included_in_pass_,
                    q_.transfer_time_settings_,
                    algo_state)},
         timeout_(timeout) {
     q_.sanitize(tt);
-    if constexpr (requires { algo_.set_extra_required_flags(0U); }) {
-      algo_.set_extra_required_flags(extra_required_route_flags(q_));
-    }
   }
 
   routing_result execute() {

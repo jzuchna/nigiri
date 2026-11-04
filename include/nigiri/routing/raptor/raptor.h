@@ -1,6 +1,5 @@
 #pragma once
 
-#include <bit>
 #include <cassert>
 #include <span>
 
@@ -21,6 +20,19 @@
 namespace nigiri::routing {
 
 enum class search_mode { kOneToOne, kOneToAll };
+
+// Calls fn.template operator()<B1, ..., Bn>() with the runtime values b1..bn
+// lifted to compile-time template arguments.
+template <bool... Bs, typename Fn>
+auto dispatch_bools(Fn&& fn) {
+  return fn.template operator()<Bs...>();
+}
+
+template <bool... Bs, typename Fn, typename... Rest>
+auto dispatch_bools(Fn&& fn, bool const b, Rest const... rest) {
+  return b ? dispatch_bools<Bs..., true>(fn, rest...)
+           : dispatch_bools<Bs..., false>(fn, rest...);
+}
 
 template <direction SearchDir,
           bool Rt,
@@ -74,6 +86,8 @@ struct raptor {
       bool const require_car_transport,
       bool const is_wheelchair,
       bool const no_compulsory_reservation,
+      bool const no_supplement_required,
+      bool const only_included_in_pass,
       transfer_time_settings const& tts,
       profile_idx_t const prf_idx)
       : tt_{tt},
@@ -99,6 +113,8 @@ struct raptor {
         require_bike_transport_{require_bike_transport},
         require_car_transport_{require_car_transport},
         no_compulsory_reservation_{no_compulsory_reservation},
+        no_supplement_required_{no_supplement_required},
+        only_included_in_pass_{only_included_in_pass},
         is_wheelchair_{is_wheelchair},
         transfer_time_settings_{tts} {
     assert(Vias == via_stops_.size());
@@ -175,47 +191,6 @@ struct raptor {
   }
 
   void set_bounds(unsigned const last_round) { bounds_last_k_ = last_round; }
-
-  // Route flags filtered at runtime in addition to the flags that are
-  // handled by the compile-time filter switch (bikes, cars, wheelchair,
-  // reservation). Bit i set <=> route_flag i is required.
-  void set_extra_required_flags(route_flags_mask_t const flags) {
-    extra_required_flags_ = flags;
-    extra_section_flags_ = 0U;
-  }
-
-  // Returns false if a required extra flag is not set on any section.
-  // Otherwise, extra_section_flags_ := extra flags only set on some sections
-  // (to be checked section by section in update_route/update_rt_transport).
-  bool check_extra_flags(std::array<bitvec, kNumRouteFlags> const& flags,
-                         auto const idx) {
-    extra_section_flags_ = 0U;
-    for (auto m = extra_required_flags_; m != 0U;
-         m = static_cast<route_flags_mask_t>(m & (m - 1U))) {
-      auto const f = static_cast<unsigned>(std::countr_zero(m));
-      if (!flags[f].test(idx * 2U)) {
-        if (!flags[f].test(idx * 2U + 1U)) {
-          return false;
-        }
-        extra_section_flags_ |= static_cast<route_flags_mask_t>(1U << f);
-      }
-    }
-    return true;
-  }
-
-  template <typename PerSection, typename Idx>
-  static bool extra_section_flags_set(route_flags_mask_t m,
-                                      PerSection const& per_section,
-                                      Idx const idx,
-                                      auto const section) {
-    for (; m != 0U; m = static_cast<route_flags_mask_t>(m & (m - 1U))) {
-      if (!per_section[static_cast<unsigned>(std::countr_zero(m))][idx]
-                      [static_cast<std::size_t>(section)]) {
-        return false;
-      }
-    }
-    return true;
-  }
 
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
@@ -295,123 +270,20 @@ struct raptor {
       std::swap(state_.prev_station_mark_, state_.station_mark_);
       utl::fill(state_.station_mark_.blocks_, 0U);
 
-      bool const clasz_filter = allowed_claszes_ != all_clasz_allowed();
-      uint8_t const filters =
-          static_cast<uint8_t>(clasz_filter << 4) |
-          static_cast<uint8_t>(require_bike_transport_ << 3) |
-          static_cast<uint8_t>(require_car_transport_ << 2) |
-          static_cast<uint8_t>(is_wheelchair_ << 1) |
-          static_cast<uint8_t>(no_compulsory_reservation_ << 0);
+      auto const clasz_filter = allowed_claszes_ != all_clasz_allowed();
 
-      any_marked |= [&]() {
-        switch (filters) {
-          case 0b00000:
-            return loop_routes<false, false, false, false, false>(k);
-          case 0b00001: return loop_routes<false, false, false, false, true>(k);
-          case 0b00010: return loop_routes<false, false, false, true, false>(k);
-          case 0b00011: return loop_routes<false, false, false, true, true>(k);
-          case 0b00100: return loop_routes<false, false, true, false, false>(k);
-          case 0b00101: return loop_routes<false, false, true, false, true>(k);
-          case 0b00110: return loop_routes<false, false, true, true, false>(k);
-          case 0b00111: return loop_routes<false, false, true, true, true>(k);
-          case 0b01000: return loop_routes<false, true, false, false, false>(k);
-          case 0b01001: return loop_routes<false, true, false, false, true>(k);
-          case 0b01010: return loop_routes<false, true, false, true, false>(k);
-          case 0b01011: return loop_routes<false, true, false, true, true>(k);
-          case 0b01100: return loop_routes<false, true, true, false, false>(k);
-          case 0b01101: return loop_routes<false, true, true, false, true>(k);
-          case 0b01110: return loop_routes<false, true, true, true, false>(k);
-          case 0b01111: return loop_routes<false, true, true, true, true>(k);
-          case 0b10000: return loop_routes<true, false, false, false, false>(k);
-          case 0b10001: return loop_routes<true, false, false, false, true>(k);
-          case 0b10010: return loop_routes<true, false, false, true, false>(k);
-          case 0b10011: return loop_routes<true, false, false, true, true>(k);
-          case 0b10100: return loop_routes<true, false, true, false, false>(k);
-          case 0b10101: return loop_routes<true, false, true, false, true>(k);
-          case 0b10110: return loop_routes<true, false, true, true, false>(k);
-          case 0b10111: return loop_routes<true, false, true, true, true>(k);
-          case 0b11000: return loop_routes<true, true, false, false, false>(k);
-          case 0b11001: return loop_routes<true, true, false, false, true>(k);
-          case 0b11010: return loop_routes<true, true, false, true, false>(k);
-          case 0b11011: return loop_routes<true, true, false, true, true>(k);
-          case 0b11100: return loop_routes<true, true, true, false, false>(k);
-          case 0b11101: return loop_routes<true, true, true, false, true>(k);
-          case 0b11110: return loop_routes<true, true, true, true, false>(k);
-          case 0b11111: return loop_routes<true, true, true, true, true>(k);
-          default: std::unreachable();
-        }
-      }();
+      any_marked |= dispatch_bools(
+          [&]<bool... Filters>() { return loop_routes<Filters...>(k); },
+          clasz_filter, require_bike_transport_, require_car_transport_,
+          is_wheelchair_, no_compulsory_reservation_, no_supplement_required_,
+          only_included_in_pass_);
 
       if constexpr (Rt) {
-        any_marked |= [&]() {
-          switch (filters) {
-            case 0b00000:
-              return loop_rt_routes<false, false, false, false, false>(k);
-            case 0b00001:
-              return loop_rt_routes<false, false, false, false, true>(k);
-            case 0b00010:
-              return loop_rt_routes<false, false, false, true, false>(k);
-            case 0b00011:
-              return loop_rt_routes<false, false, false, true, true>(k);
-            case 0b00100:
-              return loop_rt_routes<false, false, true, false, false>(k);
-            case 0b00101:
-              return loop_rt_routes<false, false, true, false, true>(k);
-            case 0b00110:
-              return loop_rt_routes<false, false, true, true, false>(k);
-            case 0b00111:
-              return loop_rt_routes<false, false, true, true, true>(k);
-            case 0b01000:
-              return loop_rt_routes<false, true, false, false, false>(k);
-            case 0b01001:
-              return loop_rt_routes<false, true, false, false, true>(k);
-            case 0b01010:
-              return loop_rt_routes<false, true, false, true, false>(k);
-            case 0b01011:
-              return loop_rt_routes<false, true, false, true, true>(k);
-            case 0b01100:
-              return loop_rt_routes<false, true, true, false, false>(k);
-            case 0b01101:
-              return loop_rt_routes<false, true, true, false, true>(k);
-            case 0b01110:
-              return loop_rt_routes<false, true, true, true, false>(k);
-            case 0b01111:
-              return loop_rt_routes<false, true, true, true, true>(k);
-            case 0b10000:
-              return loop_rt_routes<true, false, false, false, false>(k);
-            case 0b10001:
-              return loop_rt_routes<true, false, false, false, true>(k);
-            case 0b10010:
-              return loop_rt_routes<true, false, false, true, false>(k);
-            case 0b10011:
-              return loop_rt_routes<true, false, false, true, true>(k);
-            case 0b10100:
-              return loop_rt_routes<true, false, true, false, false>(k);
-            case 0b10101:
-              return loop_rt_routes<true, false, true, false, true>(k);
-            case 0b10110:
-              return loop_rt_routes<true, false, true, true, false>(k);
-            case 0b10111:
-              return loop_rt_routes<true, false, true, true, true>(k);
-            case 0b11000:
-              return loop_rt_routes<true, true, false, false, false>(k);
-            case 0b11001:
-              return loop_rt_routes<true, true, false, false, true>(k);
-            case 0b11010:
-              return loop_rt_routes<true, true, false, true, false>(k);
-            case 0b11011:
-              return loop_rt_routes<true, true, false, true, true>(k);
-            case 0b11100:
-              return loop_rt_routes<true, true, true, false, false>(k);
-            case 0b11101:
-              return loop_rt_routes<true, true, true, false, true>(k);
-            case 0b11110:
-              return loop_rt_routes<true, true, true, true, false>(k);
-            case 0b11111:
-              return loop_rt_routes<true, true, true, true, true>(k);
-            default: std::unreachable();
-          }
-        }();
+        any_marked |= dispatch_bools(
+            [&]<bool... Filters>() { return loop_rt_routes<Filters...>(k); },
+            clasz_filter, require_bike_transport_, require_car_transport_,
+            is_wheelchair_, no_compulsory_reservation_,
+            no_supplement_required_, only_included_in_pass_);
       }
 
       if (!any_marked) {
@@ -539,7 +411,9 @@ private:
             bool WithBikeFilter,
             bool WithCarFilter,
             bool WithWheelchairFilter,
-            bool WithReservationNotRequiredFilter>
+            bool WithReservationNotRequiredFilter,
+            bool WithSupplementNotRequiredFilter,
+            bool WithIncludedInPassFilter>
   bool loop_routes(unsigned const k) {
     auto any_marked = false;
     state_.route_mark_.for_each_set_bit([&](auto const r_idx) {
@@ -551,7 +425,9 @@ private:
         }
       }
 
-      auto filters = static_cast<uint8_t>(0);
+      // bit f set <=> route_flag f is only set on some sections
+      // -> has to be checked section by section
+      auto filters = static_cast<route_flags_mask_t>(0U);
 
       auto const apply_filter = [&](route_flag const f) {
         auto const flag_set_on_all_sections =
@@ -562,8 +438,7 @@ private:
           if (!flag_set_on_some_sections) {
             return false;
           }
-          filters |= static_cast<uint8_t>(
-              1 << (route_flag::kReservationNotRequired - f));
+          filters |= static_cast<route_flags_mask_t>(1U << f);
           return true;
         }
         return true;
@@ -593,35 +468,34 @@ private:
         }
       }
 
-      if (extra_required_flags_ != 0U &&
-          !check_extra_flags(tt_.route_flags_, r_idx)) {
-        return;
+      if constexpr (WithSupplementNotRequiredFilter) {
+        if (!apply_filter(route_flag::kSupplementNotRequired)) {
+          return;
+        }
+      }
+
+      if constexpr (WithIncludedInPassFilter) {
+        if (!apply_filter(route_flag::kIncludedInPass)) {
+          return;
+        }
       }
 
       ++stats_.n_routes_visited_;
       trace("┊ ├k={} updating route {}\n", k, r);
 
-      any_marked |= [&]() {
-        switch (filters) {
-          case 0b0000: return update_route<false, false, false, false>(k, r);
-          case 0b0001: return update_route<false, false, false, true>(k, r);
-          case 0b0010: return update_route<false, false, true, false>(k, r);
-          case 0b0011: return update_route<false, false, true, true>(k, r);
-          case 0b0100: return update_route<false, true, false, false>(k, r);
-          case 0b0101: return update_route<false, true, false, true>(k, r);
-          case 0b0110: return update_route<false, true, true, false>(k, r);
-          case 0b0111: return update_route<false, true, true, true>(k, r);
-          case 0b1000: return update_route<true, false, false, false>(k, r);
-          case 0b1001: return update_route<true, false, false, true>(k, r);
-          case 0b1010: return update_route<true, false, true, false>(k, r);
-          case 0b1011: return update_route<true, false, true, true>(k, r);
-          case 0b1100: return update_route<true, true, false, false>(k, r);
-          case 0b1101: return update_route<true, true, false, true>(k, r);
-          case 0b1110: return update_route<true, true, true, false>(k, r);
-          case 0b1111: return update_route<true, true, true, true>(k, r);
-          default: std::unreachable();
-        }
-      }();
+      auto const section_filter = [&](route_flag const f) {
+        return (filters & (1U << f)) != 0U;
+      };
+      any_marked |= dispatch_bools(
+          [&]<bool... SectionFilters>() {
+            return update_route<SectionFilters...>(k, r);
+          },
+          section_filter(route_flag::kBikesAllowed),
+          section_filter(route_flag::kCarsAllowed),
+          section_filter(route_flag::kWheelchairAccessible),
+          section_filter(route_flag::kReservationNotRequired),
+          section_filter(route_flag::kSupplementNotRequired),
+          section_filter(route_flag::kIncludedInPass));
     });
     return any_marked;
   }
@@ -630,7 +504,9 @@ private:
             bool WithBikeFilter,
             bool WithCarFilter,
             bool WithWheelchairFilter,
-            bool WithReservationNotRequiredFilter>
+            bool WithReservationNotRequiredFilter,
+            bool WithSupplementNotRequiredFilter,
+            bool WithIncludedInPassFilter>
   bool loop_rt_routes(unsigned const k) {
     auto any_marked = false;
     state_.rt_transport_mark_.for_each_set_bit([&](auto const rt_t_idx) {
@@ -643,7 +519,9 @@ private:
         }
       }
 
-      auto filters = static_cast<uint8_t>(0);
+      // bit f set <=> route_flag f is only set on some sections
+      // -> has to be checked section by section
+      auto filters = static_cast<route_flags_mask_t>(0U);
 
       auto const apply_filter = [&](route_flag const f) {
         auto const flag_set_on_all_sections =
@@ -654,8 +532,7 @@ private:
           if (!flag_set_on_some_sections) {
             return false;
           }
-          filters |= static_cast<uint8_t>(
-              1 << (route_flag::kReservationNotRequired - f));
+          filters |= static_cast<route_flags_mask_t>(1U << f);
           return true;
         }
         return true;
@@ -685,51 +562,34 @@ private:
         }
       }
 
-      if (extra_required_flags_ != 0U &&
-          !check_extra_flags(rtt_->rt_transport_flags_, rt_t_idx)) {
-        return;
+      if constexpr (WithSupplementNotRequiredFilter) {
+        if (!apply_filter(route_flag::kSupplementNotRequired)) {
+          return;
+        }
+      }
+
+      if constexpr (WithIncludedInPassFilter) {
+        if (!apply_filter(route_flag::kIncludedInPass)) {
+          return;
+        }
       }
 
       ++stats_.n_routes_visited_;
       trace("┊ ├k={} updating rt transport {}\n", k, rt_t);
 
-      any_marked |= [&]() {
-        switch (filters) {
-          case 0b0000:
-            return update_rt_transport<false, false, false, false>(k, rt_t);
-          case 0b0001:
-            return update_rt_transport<false, false, false, true>(k, rt_t);
-          case 0b0010:
-            return update_rt_transport<false, false, true, false>(k, rt_t);
-          case 0b0011:
-            return update_rt_transport<false, false, true, true>(k, rt_t);
-          case 0b0100:
-            return update_rt_transport<false, true, false, false>(k, rt_t);
-          case 0b0101:
-            return update_rt_transport<false, true, false, true>(k, rt_t);
-          case 0b0110:
-            return update_rt_transport<false, true, true, false>(k, rt_t);
-          case 0b0111:
-            return update_rt_transport<false, true, true, true>(k, rt_t);
-          case 0b1000:
-            return update_rt_transport<true, false, false, false>(k, rt_t);
-          case 0b1001:
-            return update_rt_transport<true, false, false, true>(k, rt_t);
-          case 0b1010:
-            return update_rt_transport<true, false, true, false>(k, rt_t);
-          case 0b1011:
-            return update_rt_transport<true, false, true, true>(k, rt_t);
-          case 0b1100:
-            return update_rt_transport<true, true, false, false>(k, rt_t);
-          case 0b1101:
-            return update_rt_transport<true, true, false, true>(k, rt_t);
-          case 0b1110:
-            return update_rt_transport<true, true, true, false>(k, rt_t);
-          case 0b1111:
-            return update_rt_transport<true, true, true, true>(k, rt_t);
-          default: std::unreachable();
-        }
-      }();
+      auto const section_filter = [&](route_flag const f) {
+        return (filters & (1U << f)) != 0U;
+      };
+      any_marked |= dispatch_bools(
+          [&]<bool... SectionFilters>() {
+            return update_rt_transport<SectionFilters...>(k, rt_t);
+          },
+          section_filter(route_flag::kBikesAllowed),
+          section_filter(route_flag::kCarsAllowed),
+          section_filter(route_flag::kWheelchairAccessible),
+          section_filter(route_flag::kReservationNotRequired),
+          section_filter(route_flag::kSupplementNotRequired),
+          section_filter(route_flag::kIncludedInPass));
     });
     return any_marked;
   }
@@ -1155,9 +1015,10 @@ private:
   template <bool WithSectionBikeFilter,
             bool WithSectionCarFilter,
             bool WithSectionWheelchairFilter,
-            bool WithSectionReservationNotRequiredFilter>
+            bool WithSectionReservationNotRequiredFilter,
+            bool WithSectionSupplementNotRequiredFilter,
+            bool WithSectionIncludedInPassFilter>
   bool update_rt_transport(unsigned const k, rt_transport_idx_t const rt_t) {
-    auto const extra_section_flags = extra_section_flags_;
     auto const stop_seq = rtt_->rt_transport_location_seq_[rt_t];
     // et[v] = there is an entry point on this transport such that the
     // journey has visited v via stops when the transport passes this stop
@@ -1197,11 +1058,12 @@ private:
         apply_filter(route_flag::kReservationNotRequired);
       }
 
-      if (extra_section_flags != 0U && !is_first &&
-          !extra_section_flags_set(extra_section_flags,
-                                   rtt_->rt_flags_per_section_, rt_t,
-                                   kFwd ? stop_idx - 1 : stop_idx)) {
-        et.fill(false);
+      if constexpr (WithSectionSupplementNotRequiredFilter) {
+        apply_filter(route_flag::kSupplementNotRequired);
+      }
+
+      if constexpr (WithSectionIncludedInPassFilter) {
+        apply_filter(route_flag::kIncludedInPass);
       }
 
       if ((kFwd && stop_idx != 0U) || (kBwd && stop_idx != n_stops - 1U)) {
@@ -1276,9 +1138,10 @@ private:
   template <bool WithSectionBikeFilter,
             bool WithSectionCarFilter,
             bool WithSectionWheelchairFilter,
-            bool WithSectionReservationNotRequiredFilter>
+            bool WithSectionReservationNotRequiredFilter,
+            bool WithSectionSupplementNotRequiredFilter,
+            bool WithSectionIncludedInPassFilter>
   bool update_route(unsigned const k, route_idx_t const r) {
-    auto const extra_section_flags = extra_section_flags_;
     auto const stop_seq = tt_.route_location_seq_[r];
     bool any_marked = false;
 
@@ -1338,11 +1201,12 @@ private:
         apply_filter(route_flag::kReservationNotRequired);
       }
 
-      if (extra_section_flags != 0U && !is_first &&
-          !extra_section_flags_set(extra_section_flags,
-                                   tt_.route_flags_per_section_, r,
-                                   kFwd ? stop_idx - 1 : stop_idx)) {
-        et = {};
+      if constexpr (WithSectionSupplementNotRequiredFilter) {
+        apply_filter(route_flag::kSupplementNotRequired);
+      }
+
+      if constexpr (WithSectionIncludedInPassFilter) {
+        apply_filter(route_flag::kIncludedInPass);
       }
 
       if constexpr (Vias != 0U) {
@@ -1646,10 +1510,10 @@ private:
   bool require_bike_transport_;
   bool require_car_transport_;
   bool no_compulsory_reservation_;
+  bool no_supplement_required_;
+  bool only_included_in_pass_;
   bool is_wheelchair_;
   transfer_time_settings transfer_time_settings_;
-  route_flags_mask_t extra_required_flags_{0U};
-  route_flags_mask_t extra_section_flags_{0U};
 };
 
 }  // namespace nigiri::routing
